@@ -7,17 +7,22 @@ environment:
   sdk: ^3.15.0-162.0.dev
 
 dependencies:
+  crypto: ^3.0.8
   flutter:
     sdk: flutter
+  flutter_riverpod: ^3.5.0
   material_ui: ^1.1.0
   path_provider: ^2.1.6
+  riverpod_annotation: ^4.0.8
+  steelmc_api:
+    path: packages/steelmc_api
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  riverpod_generator: ^4.0.10
+  build_runner: ^2.17.1
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/steel-android-aarch64
