@@ -64,7 +64,7 @@ final class InstallControllerProvider
   }
 }
 
-String _$installControllerHash() => r'e5a67fd416cb20f4a69e58055bfa6e9769d2dff3';
+String _$installControllerHash() => r'b62d71223f2f830b11d7cd8844559ec15f538424';
 
 /// Download/verify/delete lifecycle of one build. Kept alive so a download
 /// continues while its card is scrolled off screen.

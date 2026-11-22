@@ -13,7 +13,10 @@ ReleasesRepository releasesRepository(Ref ref) =>
     ReleasesRepository(ref.watch(steelMcClientProvider));
 
 @Riverpod(keepAlive: true)
-BinaryStore binaryStore(Ref ref) => BinaryStore(ref.watch(appDirProvider));
+BinaryStore binaryStore(Ref ref) => BinaryStore(
+      ref.watch(appDirProvider),
+      ref.watch(steelTargetProvider)?.assetName ?? '',
+    );
 
 @Riverpod(keepAlive: true)
 BinaryInstaller binaryInstaller(Ref ref) => BinaryInstaller(
@@ -28,4 +31,21 @@ Future<List<SteelBuild>> builds(Ref ref) async {
   final target = ref.watch(steelTargetProvider);
   if (target == null) return const [];
   return ref.watch(releasesRepositoryProvider).compatibleBuilds(target);
+}
+
+/// The downloadable build for [tag], or null if GitHub no longer lists it.
+@riverpod
+Future<SteelBuild?> buildForTag(Ref ref, String tag) async {
+  final all = await ref.watch(buildsProvider.future);
+  return all.where((b) => b.tag == tag).firstOrNull;
+}
+
+/// Tags of the builds currently downloaded. Updated by `InstallController`.
+@Riverpod(keepAlive: true)
+class InstalledTags extends _$InstalledTags {
+  @override
+  Set<String> build() => ref.read(binaryStoreProvider).installedTags();
+
+  void add(String tag) => state = {...state, tag};
+  void remove(String tag) => state = {...state}..remove(tag);
 }

@@ -8,28 +8,35 @@ part of 'server_controller.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Owns the single running server process and its log.
+/// Owns one instance's server process and its parsed log.
 
 @ProviderFor(ServerController)
-final serverControllerProvider = ServerControllerProvider._();
+final serverControllerProvider = ServerControllerFamily._();
 
-/// Owns the single running server process and its log.
+/// Owns one instance's server process and its parsed log.
 final class ServerControllerProvider
     extends $NotifierProvider<ServerController, ServerState> {
-  /// Owns the single running server process and its log.
-  ServerControllerProvider._()
-    : super(
-        from: null,
-        argument: null,
-        retry: null,
-        name: r'serverControllerProvider',
-        isAutoDispose: false,
-        dependencies: null,
-        $allTransitiveDependencies: null,
-      );
+  /// Owns one instance's server process and its parsed log.
+  ServerControllerProvider._({
+    required ServerControllerFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'serverControllerProvider',
+         isAutoDispose: false,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
 
   @override
   String debugGetCreateSourceHash() => _$serverControllerHash();
+
+  @override
+  String toString() {
+    return r'serverControllerProvider'
+        ''
+        '($argument)';
+  }
 
   @$internal
   @override
@@ -42,14 +49,56 @@ final class ServerControllerProvider
       providerOverride: $SyncValueProvider<ServerState>(value),
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    return other is ServerControllerProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
 }
 
-String _$serverControllerHash() => r'a6f0971d078c014757d94588d3bc792418f00316';
+String _$serverControllerHash() => r'f02335213726767c6d39682c46e4610e6065727d';
 
-/// Owns the single running server process and its log.
+/// Owns one instance's server process and its parsed log.
+
+final class ServerControllerFamily extends $Family
+    with
+        $ClassFamilyOverride<
+          ServerController,
+          ServerState,
+          ServerState,
+          ServerState,
+          String
+        > {
+  ServerControllerFamily._()
+    : super(
+        retry: null,
+        name: r'serverControllerProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: false,
+      );
+
+  /// Owns one instance's server process and its parsed log.
+
+  ServerControllerProvider call(String instanceId) =>
+      ServerControllerProvider._(argument: instanceId, from: this);
+
+  @override
+  String toString() => r'serverControllerProvider';
+}
+
+/// Owns one instance's server process and its parsed log.
 
 abstract class _$ServerController extends $Notifier<ServerState> {
-  ServerState build();
+  late final _$args = ref.$arg as String;
+  String get instanceId => _$args;
+
+  ServerState build(String instanceId);
   @$mustCallSuper
   @override
   WhenComplete runBuild() {
@@ -62,6 +111,6 @@ abstract class _$ServerController extends $Notifier<ServerState> {
               Object?,
               Object?
             >;
-    return element.handleCreate(ref, build);
+    return element.handleCreate(ref, () => build(_$args));
   }
 }

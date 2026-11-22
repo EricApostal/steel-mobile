@@ -2,6 +2,7 @@ import 'package:dart_mappable/dart_mappable.dart';
 
 import 'release_asset.dart';
 import 'steel_target.dart';
+import 'steel_version.dart';
 
 part 'release.mapper.dart';
 
@@ -31,13 +32,13 @@ class Release with ReleaseMappable {
   final DateTime? publishedAt;
   final List<ReleaseAsset> assets;
 
-  static final _tag = RegExp(r'^v?([^+]+)(?:\+mc(.+))?$');
+  SteelVersion get version => SteelVersion.parse(tagName);
 
   /// Steel's own version, e.g. `0.17.1`.
-  String get steelVersion => _tag.firstMatch(tagName)?.group(1) ?? tagName;
+  String get steelVersion => version.steel;
 
   /// The Minecraft version this build targets, e.g. `26.3`.
-  String? get minecraftVersion => _tag.firstMatch(tagName)?.group(2);
+  String? get minecraftVersion => version.minecraft;
 
   /// The asset built for [target], or null if this release has none.
   ReleaseAsset? assetFor(SteelTarget target) {

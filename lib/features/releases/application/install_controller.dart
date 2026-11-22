@@ -63,6 +63,7 @@ class InstallController extends _$InstallController {
         },
         onVerifying: () => state = const Installing(verifying: true),
       );
+      ref.read(installedTagsProvider.notifier).add(release.tag);
       state = const Installed();
     } on SteelMcApiException catch (e) {
       state = e.cancelled ? const NotInstalled() : InstallFailed(e.message);
@@ -79,6 +80,7 @@ class InstallController extends _$InstallController {
 
   Future<void> uninstall() async {
     await ref.read(binaryStoreProvider).delete(release);
+    ref.read(installedTagsProvider.notifier).remove(release.tag);
     state = const NotInstalled();
   }
 }

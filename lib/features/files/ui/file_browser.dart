@@ -1,0 +1,297 @@
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:forui/forui.dart';
+
+import '../../../core/format.dart';
+import '../../../core/navigation.dart';
+import '../../../core/ui/empty_state.dart';
+import '../../../core/ui/sheets.dart';
+import '../application/files_providers.dart';
+import '../data/file_service.dart';
+import 'file_editor_page.dart';
+
+/// Browse and manage one instance's directory.
+class FileBrowser extends ConsumerStatefulWidget {
+  const FileBrowser({super.key, required this.instanceId});
+
+  final String instanceId;
+
+  @override
+  ConsumerState<FileBrowser> createState() => _FileBrowserState();
+}
+
+class _FileBrowserState extends ConsumerState<FileBrowser> {
+  /// Path segments below the instance root.
+  var _segments = <String>[];
+
+  String get _path => _segments.join('/');
+  FileService get _service => ref.read(fileServiceProvider(widget.instanceId));
+
+  void _open(List<String> segments) => setState(() => _segments = segments);
+
+  void _refresh() => ref.invalidate(directoryListingProvider(widget.instanceId, _path));
+
+  Future<void> _run(Future<void> Function() action) async {
+    try {
+      await action();
+      _refresh();
+    } catch (e) {
+      if (mounted) {
+        showFToast(
+          context: context,
+          variant: FToastVariant.destructive,
+          title: Text('$e'.replaceFirst(RegExp(r'^\w*Exception: |^Invalid argument\(s\): '), '')),
+        );
+      }
+    }
+  }
+
+  Future<void> _create({required bool directory}) async {
+    final name = await showPromptSheet(
+      context,
+      title: directory ? 'New folder' : 'New file',
+      label: 'Name',
+      confirmLabel: 'Create',
+      validate: FileService.validateName,
+    );
+    if (name == null) return;
+    await _run(() => directory
+        ? _service.createDirectory(_path, name)
+        : _service.createFile(_path, name));
+  }
+
+  void _showActions(FileEntry entry) {
+    showActionSheet(
+      context,
+      title: entry.name,
+      actions: [
+        SheetAction('Rename', FLucideIcons.pencil, () async {
+          final name = await showPromptSheet(
+            context,
+            title: 'Rename',
+            label: 'Name',
+            confirmLabel: 'Rename',
+            initial: entry.name,
+            validate: FileService.validateName,
+          );
+          if (name != null && name != entry.name) {
+            await _run(() => _service.rename(entry, name));
+          }
+        }),
+        SheetAction('Delete', FLucideIcons.trash2, () async {
+          final ok = await showConfirmSheet(
+            context,
+            title: 'Delete "${entry.name}"?',
+            message: entry.isDirectory
+                ? 'The folder and everything in it will be deleted.'
+                : 'This file will be deleted.',
+            confirmLabel: 'Delete',
+            destructive: true,
+          );
+          if (ok) await _run(() => _service.delete(entry));
+        }, destructive: true),
+      ],
+    );
+  }
+
+  Future<void> _openEntry(FileEntry entry) async {
+    if (entry.isDirectory) {
+      _open(entry.path.split('/'));
+    } else {
+      await pushPage<void>(
+        context,
+        (_) => FileEditorPage(instanceId: widget.instanceId, path: entry.path),
+      );
+      _refresh(); // size/modified may have changed
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final listing = ref.watch(directoryListingProvider(widget.instanceId, _path));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Breadcrumbs(
+          segments: _segments,
+          onNavigate: _open,
+          onAdd: () => showActionSheet(context, actions: [
+            SheetAction('New file', FLucideIcons.filePlus, () => _create(directory: false)),
+            SheetAction('New folder', FLucideIcons.folderPlus, () => _create(directory: true)),
+          ]),
+        ),
+        Expanded(
+          child: listing.when(
+            loading: () => const Center(child: FCircularProgress()),
+            error: (e, _) => EmptyState(icon: FLucideIcons.triangleAlert, message: '$e'),
+            data: (entries) => RefreshIndicatorLike(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+                children: [
+                  if (_segments.isNotEmpty)
+                    _Row(
+                      icon: FLucideIcons.cornerLeftUp,
+                      title: '..',
+                      subtitle: 'Up one level',
+                      onPress: () => _open(_segments.sublist(0, _segments.length - 1)),
+                    ),
+                  if (entries.isEmpty && _segments.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 48),
+                      child: EmptyState(
+                        icon: FLucideIcons.folderOpen,
+                        message: 'Nothing here yet.\nStart the server once to generate its files.',
+                      ),
+                    )
+                  else if (entries.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 48),
+                      child: EmptyState(icon: FLucideIcons.folderOpen, message: 'This folder is empty.'),
+                    ),
+                  for (final e in entries)
+                    _Row(
+                      icon: e.isDirectory ? FLucideIcons.folder : _iconFor(e),
+                      title: e.name,
+                      subtitle: e.isDirectory
+                          ? formatDate(e.modified)
+                          : '${formatBytes(e.size)} · ${formatDate(e.modified)}',
+                      onPress: () => _openEntry(e),
+                      onMore: () => _showActions(e),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  IconData _iconFor(FileEntry e) => switch (e.extension) {
+        'png' || 'jpg' || 'jpeg' || 'gif' || 'webp' => FLucideIcons.image,
+        'toml' || 'json' || 'json5' || 'yml' || 'yaml' || 'properties' => FLucideIcons.fileCog,
+        'log' || 'txt' || 'md' => FLucideIcons.fileText,
+        _ => FLucideIcons.file,
+      };
+}
+
+/// Pass-through (kept so a pull-to-refresh can be added in one place).
+class RefreshIndicatorLike extends StatelessWidget {
+  const RefreshIndicatorLike({super.key, required this.child});
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => child;
+}
+
+class _Row extends StatelessWidget {
+  const _Row({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onPress,
+    this.onMore,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onPress;
+  final VoidCallback? onMore;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: FTile(
+        prefix: Icon(icon),
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(subtitle),
+        suffix: onMore == null
+            ? null
+            : FButton.icon(
+                variant: FButtonVariant.ghost,
+                size: FButtonSizeVariant.sm,
+                onPress: onMore,
+                child: const Icon(FLucideIcons.ellipsisVertical),
+              ),
+        onPress: onPress,
+      ),
+    );
+  }
+}
+
+class _Breadcrumbs extends StatefulWidget {
+  const _Breadcrumbs({required this.segments, required this.onNavigate, required this.onAdd});
+
+  final List<String> segments;
+  final ValueChanged<List<String>> onNavigate;
+  final VoidCallback onAdd;
+
+  @override
+  State<_Breadcrumbs> createState() => _BreadcrumbsState();
+}
+
+class _BreadcrumbsState extends State<_Breadcrumbs> {
+  final _scroll = ScrollController();
+
+  @override
+  void didUpdateWidget(_Breadcrumbs old) {
+    super.didUpdateWidget(old);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+    });
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = context.theme.colors.mutedForeground;
+    final segments = widget.segments;
+
+    Widget crumb(String label, int depth) {
+      final last = depth == segments.length;
+      return FButton(
+        size: FButtonSizeVariant.xs,
+        variant: last ? FButtonVariant.secondary : FButtonVariant.ghost,
+        mainAxisSize: MainAxisSize.min,
+        onPress: last ? null : () => widget.onNavigate(segments.sublist(0, depth)),
+        child: Text(label),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 4, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _scroll,
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  crumb('Files', 0),
+                  for (var i = 0; i < segments.length; i++) ...[
+                    Icon(FLucideIcons.chevronRight, size: 14, color: muted),
+                    crumb(segments[i], i + 1),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          FButton.icon(
+            variant: FButtonVariant.ghost,
+            size: FButtonSizeVariant.sm,
+            onPress: widget.onAdd,
+            child: const Icon(FLucideIcons.plus),
+          ),
+        ],
+      ),
+    );
+  }
+}

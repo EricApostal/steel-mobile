@@ -8,3 +8,4 @@ export 'src/exception.dart';
 export 'src/models/release.dart';
 export 'src/models/release_asset.dart';
 export 'src/models/steel_target.dart';
+export 'src/models/steel_version.dart';

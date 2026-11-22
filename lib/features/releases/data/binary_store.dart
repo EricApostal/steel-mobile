@@ -2,31 +2,50 @@ import 'dart:io';
 
 import 'steel_build.dart';
 
-/// Where downloaded binaries and the server's working data live.
+/// Where downloaded Steel binaries live.
 ///
 /// Binaries are plain data files: they never get the executable bit and are
-/// launched through the system linker (see `SteelRunner`).
+/// launched through the system linker (see `SteelRunner`). Layout:
+/// `<root>/binaries/<tag>/<asset name>`.
 class BinaryStore {
-  const BinaryStore(this._root);
+  const BinaryStore(this._root, this._assetName);
 
   final Directory _root;
 
-  /// Shared by every version so worlds/config survive upgrades.
-  Directory get serverDir => Directory('${_root.path}/server');
+  /// Name of the release asset for this device, e.g. `steel-android-aarch64`.
+  final String _assetName;
 
-  Directory _dirFor(SteelBuild b) => Directory(
-        '${_root.path}/binaries/${b.tag.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')}',
-      );
+  Directory get _binaries => Directory('${_root.path}/binaries');
 
-  File fileFor(SteelBuild b) => File('${_dirFor(b).path}/${b.asset.name}');
+  // Tags contain `+`, so the directory name is percent-encoded (reversible).
+  Directory _dirForTag(String tag) =>
+      Directory('${_binaries.path}/${Uri.encodeComponent(tag)}');
 
-  File partFileFor(SteelBuild b) =>
-      File('${_dirFor(b).path}/${b.asset.name}.part');
+  /// Tags that have a complete binary on disk.
+  Set<String> installedTags() {
+    if (!_binaries.existsSync()) return {};
+    return {
+      for (final d in _binaries.listSync().whereType<Directory>())
+        if (File('${d.path}/$_assetName').existsSync())
+          Uri.decodeComponent(d.uri.pathSegments.lastWhere((s) => s.isNotEmpty)),
+    };
+  }
 
-  bool isInstalled(SteelBuild b) => fileFor(b).existsSync();
+  File fileForTag(String tag) => File('${_dirForTag(tag).path}/$_assetName');
 
-  Future<void> delete(SteelBuild b) async {
-    final dir = _dirFor(b);
+  File partFileForTag(String tag) =>
+      File('${_dirForTag(tag).path}/$_assetName.part');
+
+  bool isInstalledTag(String tag) => fileForTag(tag).existsSync();
+
+  File fileFor(SteelBuild b) => fileForTag(b.tag);
+  File partFileFor(SteelBuild b) => partFileForTag(b.tag);
+  bool isInstalled(SteelBuild b) => isInstalledTag(b.tag);
+
+  Future<void> deleteTag(String tag) async {
+    final dir = _dirForTag(tag);
     if (await dir.exists()) await dir.delete(recursive: true);
   }
+
+  Future<void> delete(SteelBuild b) => deleteTag(b.tag);
 }
