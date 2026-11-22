@@ -4,137 +4,107 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 
 import '../../../core/ui/sheets.dart';
+import '../application/console_filter.dart';
 import '../application/server_controller.dart';
 import '../data/log_entry.dart';
 
-enum _Filter {
-  all('All'),
-  warnings('Warnings'),
-  errors('Errors');
-
-  const _Filter(this.label);
-  final String label;
-
-  bool accepts(LogEntry e) => switch (this) {
-        all => true,
-        warnings => const {LogLevel.warn, LogLevel.error, LogLevel.system, LogLevel.command}.contains(e.level),
-        errors => const {LogLevel.error, LogLevel.system, LogLevel.command}.contains(e.level),
-      };
-}
-
-/// Compact, color-coded server log with a level filter.
-class ConsoleView extends ConsumerStatefulWidget {
-  const ConsoleView({super.key, required this.instanceId});
+/// The log as slivers, so it scrolls together with the rest of the page:
+/// a filter bar, then one color-coded row per entry.
+class ConsoleSliver extends ConsumerWidget {
+  const ConsoleSliver({super.key, required this.instanceId});
 
   final String instanceId;
 
   @override
-  ConsumerState<ConsoleView> createState() => _ConsoleViewState();
-}
-
-class _ConsoleViewState extends ConsumerState<ConsoleView> {
-  final _scroll = ScrollController();
-  var _filter = _Filter.all;
-  var _following = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _scroll.addListener(() {
-      if (_scroll.hasClients) _following = _scroll.position.extentAfter < 48;
-    });
-  }
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
-
-  void _jumpToEnd() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = context.theme;
-    final entries = ref.watch(
-      serverControllerProvider(widget.instanceId).select((s) => s.entries),
-    );
-    ref.listen(serverControllerProvider(widget.instanceId).select((s) => s.entries), (_, _) {
-      if (_following) _jumpToEnd();
-    });
-    final visible = entries.where(_filter.accepts).toList();
+    final entries = ref.watch(serverControllerProvider(instanceId).select((s) => s.entries));
+    final filter = ref.watch(consoleFilterControllerProvider(instanceId));
+    final visible = entries.where(filter.accepts).toList();
+    final background = theme.colors.secondary;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 4, 8),
-          child: Row(
-            children: [
-              for (final f in _Filter.values) ...[
-                FButton(
-                  size: FButtonSizeVariant.xs,
-                  variant: _filter == f ? FButtonVariant.secondary : FButtonVariant.ghost,
-                  mainAxisSize: MainAxisSize.min,
-                  onPress: () => setState(() => _filter = f),
-                  child: Text(f.label),
-                ),
-                const SizedBox(width: 4),
-              ],
-              const Spacer(),
-              FButton.icon(
-                variant: FButtonVariant.ghost,
-                size: FButtonSizeVariant.sm,
-                onPress: entries.isEmpty ? null : () => _copy(context, entries),
-                child: const Icon(FLucideIcons.copy),
-              ),
-              FButton.icon(
-                variant: FButtonVariant.ghost,
-                size: FButtonSizeVariant.sm,
-                onPress: entries.isEmpty
-                    ? null
-                    : ref.read(serverControllerProvider(widget.instanceId).notifier).clearLog,
-                child: const Icon(FLucideIcons.eraser),
-              ),
-            ],
-          ),
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverToBoxAdapter(child: _FilterBar(instanceId: instanceId, entries: entries)),
+        SliverToBoxAdapter(
+          child: ColoredBox(color: background, child: const SizedBox(height: 6, width: double.infinity)),
         ),
-        Expanded(
-          child: ColoredBox(
-            color: theme.colors.secondary,
-            child: visible.isEmpty
-                ? Center(
-                    child: Text(
-                      entries.isEmpty ? 'No output yet.' : 'Nothing matches this filter.',
-                      style: theme.typography.body.sm.copyWith(color: theme.colors.mutedForeground),
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scroll,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    itemCount: visible.length,
-                    itemBuilder: (_, i) => _LogRow(entry: visible[i]),
+        if (visible.isEmpty)
+          SliverToBoxAdapter(
+            child: ColoredBox(
+              color: background,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 48),
+                child: Center(
+                  child: Text(
+                    entries.isEmpty ? 'No output yet.' : 'Nothing matches this filter.',
+                    style: theme.typography.body.sm.copyWith(color: theme.colors.mutedForeground),
                   ),
+                ),
+              ),
+            ),
+          )
+        else
+          SliverList.builder(
+            itemCount: visible.length,
+            itemBuilder: (_, i) => ColoredBox(color: background, child: _LogRow(entry: visible[i])),
           ),
-        ),
-        _CommandBar(
-          instanceId: widget.instanceId,
-          onSent: () {
-            _following = true;
-            _jumpToEnd();
-          },
-        ),
+        // Keeps the panel filling the screen when the log is short.
+        SliverFillRemaining(hasScrollBody: false, child: ColoredBox(color: background)),
       ],
     );
   }
+}
 
-  Future<void> _copy(BuildContext context, List<LogEntry> entries) async {
+class _FilterBar extends ConsumerWidget {
+  const _FilterBar({required this.instanceId, required this.entries});
+
+  final String instanceId;
+  final List<LogEntry> entries;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filter = ref.watch(consoleFilterControllerProvider(instanceId));
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 8),
+      child: Row(
+        children: [
+          for (final f in ConsoleFilter.values) ...[
+            FButton(
+              size: FButtonSizeVariant.xs,
+              variant: filter == f ? FButtonVariant.secondary : FButtonVariant.ghost,
+              mainAxisSize: MainAxisSize.min,
+              onPress: () => ref.read(consoleFilterControllerProvider(instanceId).notifier).select(f),
+              child: Text(f.label),
+            ),
+            const SizedBox(width: 4),
+          ],
+          const Spacer(),
+          FButton.icon(
+            variant: FButtonVariant.ghost,
+            size: FButtonSizeVariant.sm,
+            onPress: entries.isEmpty ? null : () => _copy(context),
+            child: const Icon(FLucideIcons.copy),
+          ),
+          FButton.icon(
+            variant: FButtonVariant.ghost,
+            size: FButtonSizeVariant.sm,
+            onPress: entries.isEmpty
+                ? null
+                : ref.read(serverControllerProvider(instanceId).notifier).clearLog,
+            child: const Icon(FLucideIcons.eraser),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _copy(BuildContext context) async {
     final text = entries
-        .map((e) => '${e.time ?? ''} ${e.level == LogLevel.system ? '' : '[${e.level.name}] '}${e.message}'.trim())
+        .map((e) =>
+            '${e.time ?? ''} ${e.level == LogLevel.system ? '' : '[${e.level.name}] '}${e.message}${e.count > 1 ? '  (x${e.count})' : ''}'
+                .trim())
         .join('\n');
     await Clipboard.setData(ClipboardData(text: text));
     if (context.mounted) {
@@ -235,18 +205,18 @@ class _LogRow extends StatelessWidget {
   }
 }
 
-/// Input for sending commands to the running server.
-class _CommandBar extends ConsumerStatefulWidget {
-  const _CommandBar({required this.instanceId, required this.onSent});
+/// Input for sending commands to the running server: history, field, send.
+class CommandField extends ConsumerStatefulWidget {
+  const CommandField({super.key, required this.instanceId, required this.onSent});
 
   final String instanceId;
   final VoidCallback onSent;
 
   @override
-  ConsumerState<_CommandBar> createState() => _CommandBarState();
+  ConsumerState<CommandField> createState() => _CommandFieldState();
 }
 
-class _CommandBarState extends ConsumerState<_CommandBar> {
+class _CommandFieldState extends ConsumerState<CommandField> {
   final _text = TextEditingController();
   final _focus = FocusNode();
 
@@ -292,34 +262,31 @@ class _CommandBarState extends ConsumerState<_CommandBar> {
     final server = ref.watch(serverControllerProvider(widget.instanceId));
     final running = server.status == ServerStatus.running;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-      child: Row(
-        children: [
-          FButton.icon(
-            variant: FButtonVariant.ghost,
-            onPress: server.history.isEmpty ? null : () => _showHistory(server.history),
-            child: const Icon(FLucideIcons.history),
+    return Row(
+      children: [
+        FButton.icon(
+          variant: FButtonVariant.ghost,
+          onPress: server.history.isEmpty ? null : () => _showHistory(server.history),
+          child: const Icon(FLucideIcons.history),
+        ),
+        Expanded(
+          child: FTextField(
+            control: FTextFieldControl.managed(controller: _text),
+            focusNode: _focus,
+            enabled: running,
+            hint: running ? 'Send a command…' : 'Server is stopped',
+            autocorrect: false,
+            enableSuggestions: false,
+            textInputAction: TextInputAction.send,
+            onSubmit: (_) => _send(),
           ),
-          Expanded(
-            child: FTextField(
-              control: FTextFieldControl.managed(controller: _text),
-              focusNode: _focus,
-              enabled: running,
-              hint: running ? 'Send a command…' : 'Start the server to send commands',
-              autocorrect: false,
-              enableSuggestions: false,
-              textInputAction: TextInputAction.send,
-              onSubmit: (_) => _send(),
-            ),
-          ),
-          const SizedBox(width: 8),
-          FButton.icon(
-            onPress: running && _text.text.trim().isNotEmpty ? _send : null,
-            child: const Icon(FLucideIcons.send),
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 8),
+        FButton.icon(
+          onPress: running && _text.text.trim().isNotEmpty ? _send : null,
+          child: const Icon(FLucideIcons.send),
+        ),
+      ],
     );
   }
 }

@@ -9,6 +9,7 @@ import '../../releases/application/releases_providers.dart';
 import '../data/config_bootstrap.dart';
 import '../data/log_entry.dart';
 import '../data/steel_runner.dart';
+import 'runner_provider.dart';
 
 part 'server_controller.g.dart';
 
@@ -45,7 +46,6 @@ class ServerState {
 @Riverpod(keepAlive: true)
 class ServerController extends _$ServerController {
   static const _maxEntries = 1500;
-  static const _runner = SteelRunner();
 
   SteelProcess? _process;
   var _stopRequested = false;
@@ -67,6 +67,7 @@ class ServerController extends _$ServerController {
     final instance = ref.read(instanceProvider(instanceId));
     if (instance == null) return;
 
+    final runner = ref.read(steelRunnerProvider);
     final binary = ref.read(binaryStoreProvider).fileForTag(instance.versionTag);
     final dir = ref.read(instanceStoreProvider).dirFor(instanceId);
 
@@ -75,6 +76,11 @@ class ServerController extends _$ServerController {
     state = ServerState(status: ServerStatus.starting, history: state.history);
     _system('Starting Steel ${instance.version.steel}…');
 
+    if (runner == null) {
+      _system("This device isn't supported by Steel.", LogLevel.error);
+      _finish();
+      return;
+    }
     if (!binary.existsSync()) {
       _system('This version is not downloaded.', LogLevel.error);
       _finish();
@@ -82,12 +88,12 @@ class ServerController extends _$ServerController {
     }
 
     try {
-      await const ConfigBootstrap(_runner).ensurePort(
+      await ConfigBootstrap(runner).ensurePort(
         binary: binary,
         dir: dir,
         port: instance.port,
       );
-      _process = await _runner.start(binary, workingDirectory: dir);
+      _process = await runner.start(binary, workingDirectory: dir);
     } catch (e) {
       _system('Failed to start: $e', LogLevel.error);
       _finish();

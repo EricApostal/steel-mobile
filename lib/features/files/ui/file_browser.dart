@@ -6,28 +6,29 @@ import '../../../core/format.dart';
 import '../../../core/navigation.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/sheets.dart';
+import '../application/browser_path.dart';
 import '../application/files_providers.dart';
 import '../data/file_service.dart';
 import 'file_editor_page.dart';
 
-/// Browse and manage one instance's directory.
-class FileBrowser extends ConsumerStatefulWidget {
-  const FileBrowser({super.key, required this.instanceId});
+/// Browse and manage one instance's directory, as slivers so the list scrolls
+/// together with the rest of the page.
+class FileBrowserSliver extends ConsumerStatefulWidget {
+  const FileBrowserSliver({super.key, required this.instanceId});
 
   final String instanceId;
 
   @override
-  ConsumerState<FileBrowser> createState() => _FileBrowserState();
+  ConsumerState<FileBrowserSliver> createState() => _FileBrowserSliverState();
 }
 
-class _FileBrowserState extends ConsumerState<FileBrowser> {
-  /// Path segments below the instance root.
-  var _segments = <String>[];
-
+class _FileBrowserSliverState extends ConsumerState<FileBrowserSliver> {
+  List<String> get _segments => ref.read(browserPathProvider(widget.instanceId));
   String get _path => _segments.join('/');
   FileService get _service => ref.read(fileServiceProvider(widget.instanceId));
 
-  void _open(List<String> segments) => setState(() => _segments = segments);
+  void _open(List<String> segments) =>
+      ref.read(browserPathProvider(widget.instanceId).notifier).open(segments);
 
   void _refresh() => ref.invalidate(directoryListingProvider(widget.instanceId, _path));
 
@@ -108,60 +109,64 @@ class _FileBrowserState extends ConsumerState<FileBrowser> {
 
   @override
   Widget build(BuildContext context) {
-    final listing = ref.watch(directoryListingProvider(widget.instanceId, _path));
+    final segments = ref.watch(browserPathProvider(widget.instanceId));
+    final listing = ref.watch(directoryListingProvider(widget.instanceId, segments.join('/')));
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _Breadcrumbs(
-          segments: _segments,
-          onNavigate: _open,
-          onAdd: () => showActionSheet(context, actions: [
-            SheetAction('New file', FLucideIcons.filePlus, () => _create(directory: false)),
-            SheetAction('New folder', FLucideIcons.folderPlus, () => _create(directory: true)),
-          ]),
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverToBoxAdapter(
+          child: _Breadcrumbs(
+            segments: segments,
+            onNavigate: _open,
+            onAdd: () => showActionSheet(context, actions: [
+              SheetAction('New file', FLucideIcons.filePlus, () => _create(directory: false)),
+              SheetAction('New folder', FLucideIcons.folderPlus, () => _create(directory: true)),
+            ]),
+          ),
         ),
-        Expanded(
-          child: listing.when(
-            loading: () => const Center(child: FCircularProgress()),
-            error: (e, _) => EmptyState(icon: FLucideIcons.triangleAlert, message: '$e'),
-            data: (entries) => RefreshIndicatorLike(
-              child: ListView(
+        listing.when(
+          loading: () => const SliverToBoxAdapter(
+            child: Padding(padding: EdgeInsets.all(32), child: Center(child: FCircularProgress())),
+          ),
+          error: (e, _) => SliverToBoxAdapter(
+            child: EmptyState(icon: FLucideIcons.triangleAlert, message: '$e'),
+          ),
+          data: (entries) => SliverMainAxisGroup(
+            slivers: [
+              SliverPadding(
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-                children: [
-                  if (_segments.isNotEmpty)
-                    _Row(
-                      icon: FLucideIcons.cornerLeftUp,
-                      title: '..',
-                      subtitle: 'Up one level',
-                      onPress: () => _open(_segments.sublist(0, _segments.length - 1)),
-                    ),
-                  if (entries.isEmpty && _segments.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 48),
-                      child: EmptyState(
-                        icon: FLucideIcons.folderOpen,
-                        message: 'Nothing here yet.\nStart the server once to generate its files.',
+                sliver: SliverList.list(
+                  children: [
+                    if (segments.isNotEmpty)
+                      _Row(
+                        icon: FLucideIcons.cornerLeftUp,
+                        title: '..',
+                        subtitle: 'Up one level',
+                        onPress: () => _open(segments.sublist(0, segments.length - 1)),
                       ),
-                    )
-                  else if (entries.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 48),
-                      child: EmptyState(icon: FLucideIcons.folderOpen, message: 'This folder is empty.'),
-                    ),
-                  for (final e in entries)
-                    _Row(
-                      icon: e.isDirectory ? FLucideIcons.folder : _iconFor(e),
-                      title: e.name,
-                      subtitle: e.isDirectory
-                          ? formatDate(e.modified)
-                          : '${formatBytes(e.size)} · ${formatDate(e.modified)}',
-                      onPress: () => _openEntry(e),
-                      onMore: () => _showActions(e),
-                    ),
-                ],
+                    for (final e in entries)
+                      _Row(
+                        icon: e.isDirectory ? FLucideIcons.folder : _iconFor(e),
+                        title: e.name,
+                        subtitle: e.isDirectory
+                            ? formatDate(e.modified)
+                            : '${formatBytes(e.size)} · ${formatDate(e.modified)}',
+                        onPress: () => _openEntry(e),
+                        onMore: () => _showActions(e),
+                      ),
+                  ],
+                ),
               ),
-            ),
+              if (entries.isEmpty)
+                SliverToBoxAdapter(
+                  child: EmptyState(
+                    icon: FLucideIcons.folderOpen,
+                    message: segments.isEmpty
+                        ? 'Nothing here yet.\nStart the server once to generate its files.'
+                        : 'This folder is empty.',
+                  ),
+                ),
+            ],
           ),
         ),
       ],
@@ -174,14 +179,6 @@ class _FileBrowserState extends ConsumerState<FileBrowser> {
         'log' || 'txt' || 'md' => FLucideIcons.fileText,
         _ => FLucideIcons.file,
       };
-}
-
-/// Pass-through (kept so a pull-to-refresh can be added in one place).
-class RefreshIndicatorLike extends StatelessWidget {
-  const RefreshIndicatorLike({super.key, required this.child});
-  final Widget child;
-  @override
-  Widget build(BuildContext context) => child;
 }
 
 class _Row extends StatelessWidget {

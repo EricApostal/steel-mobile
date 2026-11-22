@@ -2,14 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-/// Runs a binary that is NOT executable, using the same approach as
-/// termux-exec: Android forbids `execve()` on files in app data, but the system
-/// dynamic linker is executable and can map any readable ELF, so we run
-/// `linker64 /abs/path/to/binary` instead. The binary must be a PIE.
-class SteelRunner {
-  const SteelRunner();
+import '../../../core/platform/binary_launcher.dart';
 
-  static const linker = '/system/bin/linker64';
+/// Starts Steel binaries using the host's [BinaryLauncher].
+class SteelRunner {
+  const SteelRunner(this._launcher);
+
+  final BinaryLauncher _launcher;
 
   Future<SteelProcess> start(
     File binary, {
@@ -17,9 +16,11 @@ class SteelRunner {
     required Directory workingDirectory,
   }) async {
     await workingDirectory.create(recursive: true);
+    await _launcher.prepare(binary);
+    final command = _launcher.command(binary, args);
     final process = await Process.start(
-      linker,
-      [binary.absolute.path, ...args], // linker64 requires an absolute path
+      command.executable,
+      command.arguments,
       workingDirectory: workingDirectory.path,
       environment: {'HOME': workingDirectory.path},
     );

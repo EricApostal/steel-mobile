@@ -4,9 +4,8 @@ import 'steel_build.dart';
 
 /// Where downloaded Steel binaries live.
 ///
-/// Binaries are plain data files: they never get the executable bit and are
-/// launched through the system linker (see `SteelRunner`). Layout:
-/// `<root>/binaries/<tag>/<asset name>`.
+/// How a binary is made runnable is the host's business (see
+/// `BinaryLauncher`). Layout: `<root>/binaries/<tag>/<asset name>`.
 class BinaryStore {
   const BinaryStore(this._root, this._assetName);
 
