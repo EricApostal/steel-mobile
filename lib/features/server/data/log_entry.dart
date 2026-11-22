@@ -1,4 +1,4 @@
-enum LogLevel { trace, debug, info, warn, error, system }
+enum LogLevel { trace, debug, info, warn, error, system, command }
 
 class LogEntry {
   const LogEntry({
@@ -6,6 +6,7 @@ class LogEntry {
     required this.level,
     required this.message,
     this.time,
+    this.count = 1,
   });
 
   final int id;
@@ -15,8 +16,18 @@ class LogEntry {
   final String? time;
   final String message;
 
+  /// How many consecutive identical lines this entry stands for.
+  final int count;
+
   LogEntry withMessage(String message) =>
-      LogEntry(id: id, level: level, message: message, time: time);
+      LogEntry(id: id, level: level, message: message, time: time, count: count);
+
+  /// This entry again, one more time (identical consecutive line).
+  LogEntry repeated(String? latestTime) =>
+      LogEntry(id: id, level: level, message: message, time: latestTime ?? time, count: count + 1);
+
+  bool sameAs(LogEntry other) =>
+      level == other.level && message == other.message;
 
   /// Parses a Steel log line such as `  0.02s [Info] Started Steel Server`.
   /// Returns null for lines that aren't in that format (continuations).

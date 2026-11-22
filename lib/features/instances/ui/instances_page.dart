@@ -6,6 +6,7 @@ import '../../../core/navigation.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../server/application/server_controller.dart';
 import '../application/instances_controller.dart';
+import '../application/network_providers.dart';
 import '../data/instance.dart';
 import 'instance_form_sheet.dart';
 import 'instance_page.dart';
@@ -57,6 +58,7 @@ class _InstanceTile extends ConsumerWidget {
       serverControllerProvider(instance.id).select((s) => s.status),
     );
     final mc = instance.version.minecraft;
+    final port = ref.watch(instancePortProvider(instance.id));
 
     return FTile(
       prefix: const Icon(FLucideIcons.server),
@@ -64,7 +66,7 @@ class _InstanceTile extends ConsumerWidget {
       subtitle: Text([
         'Steel ${instance.version.steel}',
         if (mc != null) 'MC $mc',
-        ':${instance.port}',
+        ':$port',
       ].join(' · ')),
       details: StatusBadge(status: status),
       suffix: const Icon(FLucideIcons.chevronRight),

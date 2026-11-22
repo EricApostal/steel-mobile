@@ -61,7 +61,7 @@ final class ServerControllerProvider
   }
 }
 
-String _$serverControllerHash() => r'f02335213726767c6d39682c46e4610e6065727d';
+String _$serverControllerHash() => r'8e7c2d6d8d7540b8e640752f3d59fb77b9a6d466';
 
 /// Owns one instance's server process and its parsed log.
 

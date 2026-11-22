@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../instances/application/instances_controller.dart';
+import '../../instances/application/network_providers.dart';
 import '../../releases/application/releases_providers.dart';
 import '../data/config_bootstrap.dart';
 import '../data/log_entry.dart';
@@ -17,17 +18,26 @@ class ServerState {
   const ServerState({
     this.status = ServerStatus.idle,
     this.entries = const [],
+    this.history = const [],
   });
 
   final ServerStatus status;
   final List<LogEntry> entries;
 
+  /// Commands sent this session, most recent first.
+  final List<String> history;
+
   bool get isActive => status != ServerStatus.idle;
 
-  ServerState copyWith({ServerStatus? status, List<LogEntry>? entries}) =>
+  ServerState copyWith({
+    ServerStatus? status,
+    List<LogEntry>? entries,
+    List<String>? history,
+  }) =>
       ServerState(
         status: status ?? this.status,
         entries: entries ?? this.entries,
+        history: history ?? this.history,
       );
 }
 
@@ -62,7 +72,7 @@ class ServerController extends _$ServerController {
 
     _stopRequested = false;
     _entries.clear();
-    state = const ServerState(status: ServerStatus.starting);
+    state = ServerState(status: ServerStatus.starting, history: state.history);
     _system('Starting Steel ${instance.version.steel}…');
 
     if (!binary.existsSync()) {
@@ -84,6 +94,7 @@ class ServerController extends _$ServerController {
       return;
     }
 
+    ref.invalidate(instancePortProvider(instanceId)); // bootstrap may have set it
     state = state.copyWith(status: ServerStatus.running);
     unawaited(_pump(_process!));
   }
@@ -114,6 +125,24 @@ class ServerController extends _$ServerController {
     });
   }
 
+  /// Sends [command] to the server console and echoes it in the log.
+  Future<void> sendCommand(String command) async {
+    final text = command.trim();
+    final process = _process;
+    if (text.isEmpty || process == null || state.status != ServerStatus.running) return;
+
+    _entries.add(LogEntry(id: _nextId++, level: LogLevel.command, message: text));
+    state = state.copyWith(
+      history: [text, ...state.history.where((c) => c != text)].take(30).toList(),
+    );
+    _scheduleFlush();
+    try {
+      await process.writeLine(text);
+    } catch (e) {
+      _system('Could not send command: $e', LogLevel.error);
+    }
+  }
+
   void clearLog() {
     _entries.clear();
     state = state.copyWith(entries: const []);
@@ -133,8 +162,16 @@ class ServerController extends _$ServerController {
     if (line.trim().isEmpty) return;
     final parsed = LogEntry.parse(line, _nextId);
     if (parsed != null) {
-      _nextId++;
-      _entries.add(parsed);
+      final last = _entries.lastOrNull;
+      if (last != null &&
+          last.level != LogLevel.system &&
+          last.level != LogLevel.command &&
+          last.sameAs(parsed)) {
+        _entries[_entries.length - 1] = last.repeated(parsed.time); // collapse repeats
+      } else {
+        _nextId++;
+        _entries.add(parsed);
+      }
     } else if (_entries.isNotEmpty && _entries.last.level != LogLevel.system) {
       // Continuation of a multi-line message.
       final last = _entries.removeLast();

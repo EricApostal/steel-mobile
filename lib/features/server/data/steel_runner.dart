@@ -37,6 +37,12 @@ class SteelProcess {
 
   Future<int> get exitCode => _process.exitCode;
 
+  /// Sends a line to the server's console (stdin).
+  Future<void> writeLine(String line) async {
+    _process.stdin.writeln(line);
+    await _process.stdin.flush();
+  }
+
   bool kill([ProcessSignal signal = ProcessSignal.sigterm]) =>
       _process.kill(signal);
 

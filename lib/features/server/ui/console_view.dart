@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 
+import '../../../core/ui/sheets.dart';
 import '../application/server_controller.dart';
 import '../data/log_entry.dart';
 
@@ -16,8 +17,8 @@ enum _Filter {
 
   bool accepts(LogEntry e) => switch (this) {
         all => true,
-        warnings => e.level == LogLevel.warn || e.level == LogLevel.error || e.level == LogLevel.system,
-        errors => e.level == LogLevel.error || e.level == LogLevel.system,
+        warnings => const {LogLevel.warn, LogLevel.error, LogLevel.system, LogLevel.command}.contains(e.level),
+        errors => const {LogLevel.error, LogLevel.system, LogLevel.command}.contains(e.level),
       };
 }
 
@@ -120,6 +121,13 @@ class _ConsoleViewState extends ConsumerState<ConsoleView> {
                   ),
           ),
         ),
+        _CommandBar(
+          instanceId: widget.instanceId,
+          onSent: () {
+            _following = true;
+            _jumpToEnd();
+          },
+        ),
       ],
     );
   }
@@ -161,6 +169,16 @@ class _LogRow extends StatelessWidget {
       );
     }
 
+    if (entry.level == LogLevel.command) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+        child: Text(
+          '› ${entry.message}',
+          style: mono.copyWith(color: colors.primary, fontWeight: FontWeight.w600),
+        ),
+      );
+    }
+
     final accent = switch (entry.level) {
       LogLevel.error => colors.destructive,
       LogLevel.warn => _warn,
@@ -193,6 +211,112 @@ class _LogRow extends StatelessWidget {
                 },
               ),
             ),
+          ),
+          if (entry.count > 1)
+            Padding(
+              padding: const EdgeInsets.only(left: 8, top: 1),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colors.muted,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  child: Text(
+                    '×${entry.count}',
+                    style: mono.copyWith(fontSize: 10.5, color: colors.mutedForeground),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Input for sending commands to the running server.
+class _CommandBar extends ConsumerStatefulWidget {
+  const _CommandBar({required this.instanceId, required this.onSent});
+
+  final String instanceId;
+  final VoidCallback onSent;
+
+  @override
+  ConsumerState<_CommandBar> createState() => _CommandBarState();
+}
+
+class _CommandBarState extends ConsumerState<_CommandBar> {
+  final _text = TextEditingController();
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _text.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _text.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _send() {
+    final command = _text.text.trim();
+    if (command.isEmpty) return;
+    ref.read(serverControllerProvider(widget.instanceId).notifier).sendCommand(command);
+    _text.clear();
+    _focus.requestFocus(); // keep the keyboard up for the next command
+    widget.onSent();
+  }
+
+  void _showHistory(List<String> history) {
+    showActionSheet(
+      context,
+      title: 'Recent commands',
+      actions: [
+        for (final c in history.take(8))
+          SheetAction(c, FLucideIcons.history, () {
+            _text.text = c;
+            _text.selection = TextSelection.collapsed(offset: c.length);
+            _focus.requestFocus();
+          }),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final server = ref.watch(serverControllerProvider(widget.instanceId));
+    final running = server.status == ServerStatus.running;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      child: Row(
+        children: [
+          FButton.icon(
+            variant: FButtonVariant.ghost,
+            onPress: server.history.isEmpty ? null : () => _showHistory(server.history),
+            child: const Icon(FLucideIcons.history),
+          ),
+          Expanded(
+            child: FTextField(
+              control: FTextFieldControl.managed(controller: _text),
+              focusNode: _focus,
+              enabled: running,
+              hint: running ? 'Send a command…' : 'Start the server to send commands',
+              autocorrect: false,
+              enableSuggestions: false,
+              textInputAction: TextInputAction.send,
+              onSubmit: (_) => _send(),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FButton.icon(
+            onPress: running && _text.text.trim().isNotEmpty ? _send : null,
+            child: const Icon(FLucideIcons.send),
           ),
         ],
       ),
