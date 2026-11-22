@@ -1,7 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:forui/forui.dart';
 
-import '../../../core/ui/sheets.dart';
+import '../../../core/ui/action_menu.dart';
+import '../../../core/ui/popups.dart';
 import '../data/toml/field_spec.dart';
 import '../data/toml/json_schema.dart';
 import '../data/toml/toml_document.dart';
@@ -117,10 +118,18 @@ class _Section extends StatelessWidget {
   }
 
   Future<void> _addOption(BuildContext context, List<(String, SchemaNode)> unset) async {
-    final key = await showSheet<String>(
+    final key = await showPopup<String>(
       context,
-      (sheet) => SheetFrame(
+      builder: (context, style) => PopupFrame(
+        style: style,
         title: 'Add option',
+        actions: [
+          FButton(
+            variant: FButtonVariant.outline,
+            onPress: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
         child: FTileGroup(
           children: [
             for (final (k, node) in unset)
@@ -128,9 +137,9 @@ class _Section extends StatelessWidget {
                 title: Text(FieldSpec.humanize(k)),
                 subtitle: node.description == null
                     ? null
-                    : Text(node.description!, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    : Text(node.description!, maxLines: 3, overflow: TextOverflow.ellipsis),
                 prefix: const Icon(FLucideIcons.plus),
-                onPress: () => Navigator.of(sheet).pop(k),
+                onPress: () => Navigator.of(context).pop(k),
               ),
           ],
         ),
@@ -435,7 +444,7 @@ class _TextValueFieldState extends State<_TextValueField> {
   }
 }
 
-/// Pick one of a fixed set: buttons for a few options, a sheet for many.
+/// Pick one of a fixed set: buttons for a few options, a dropdown for many.
 class _ChoiceField extends StatelessWidget {
   const _ChoiceField({
     required this.options,
@@ -467,19 +476,19 @@ class _ChoiceField extends StatelessWidget {
         ],
       );
     }
-    return FButton(
-      variant: FButtonVariant.outline,
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      suffix: const Icon(FLucideIcons.chevronsUpDown),
-      onPress: () => showActionSheet(
-        context,
-        title: title,
-        actions: [
-          for (final o in options)
-            SheetAction(o, o == value ? FLucideIcons.circleCheck : FLucideIcons.circle, () => onSelect(o)),
-        ],
+    return ActionMenu(
+      menuAnchor: Alignment.topLeft,
+      childAnchor: Alignment.bottomLeft,
+      actions: [
+        for (final o in options) MenuAction(o, FLucideIcons.circle, () => onSelect(o), selected: o == value),
+      ],
+      builder: (context, toggle) => FButton(
+        variant: FButtonVariant.outline,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        suffix: const Icon(FLucideIcons.chevronsUpDown),
+        onPress: toggle,
+        child: Text(value),
       ),
-      child: Text(value),
     );
   }
 }
@@ -531,7 +540,7 @@ class _StringListField extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           prefix: const Icon(FLucideIcons.plus),
           onPress: () async {
-            final item = await showPromptSheet(
+            final item = await showPromptDialog(
               context,
               title: 'Add to ${title.toLowerCase()}',
               label: 'Value',
@@ -572,7 +581,7 @@ class _RawField extends StatelessWidget {
           variant: FButtonVariant.outline,
           mainAxisSize: MainAxisSize.min,
           onPress: () async {
-            final text = await showPromptSheet(
+            final text = await showPromptDialog(
               context,
               title: 'Edit value',
               label: 'TOML value',

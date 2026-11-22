@@ -3,7 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 
-import '../../../core/ui/sheets.dart';
+import '../../../core/ui/action_menu.dart';
 import '../application/console_filter.dart';
 import '../application/server_controller.dart';
 import '../data/log_entry.dart';
@@ -276,21 +276,6 @@ class _CommandFieldState extends ConsumerState<CommandField> {
     _focus.requestFocus(); // keep the keyboard up for the next command
   }
 
-  void _showHistory(List<String> history) {
-    showActionSheet(
-      context,
-      title: 'Recent commands',
-      actions: [
-        for (final c in history.take(8))
-          SheetAction(c, FLucideIcons.history, () {
-            _text.text = c;
-            _text.selection = TextSelection.collapsed(offset: c.length);
-            _focus.requestFocus();
-          }),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final server = ref.watch(serverControllerProvider(widget.instanceId));
@@ -298,10 +283,23 @@ class _CommandFieldState extends ConsumerState<CommandField> {
 
     return Row(
       children: [
-        FButton.icon(
-          variant: FButtonVariant.ghost,
-          onPress: server.history.isEmpty ? null : () => _showHistory(server.history),
-          child: const Icon(FLucideIcons.history),
+        ActionMenu(
+          menuAnchor: Alignment.bottomLeft,
+          childAnchor: Alignment.topLeft,
+          maxWidth: 320,
+          actions: [
+            for (final c in server.history.take(8))
+              MenuAction(c, FLucideIcons.history, () {
+                _text.text = c;
+                _text.selection = TextSelection.collapsed(offset: c.length);
+                _focus.requestFocus();
+              }),
+          ],
+          builder: (context, toggle) => FButton.icon(
+            variant: FButtonVariant.ghost,
+            onPress: server.history.isEmpty ? null : toggle,
+            child: const Icon(FLucideIcons.history),
+          ),
         ),
         Expanded(
           child: FTextField(

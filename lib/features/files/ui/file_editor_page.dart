@@ -4,7 +4,9 @@ import 'package:forui/forui.dart';
 
 import '../../../core/format.dart';
 import '../../../core/ui/empty_state.dart';
-import '../../../core/ui/sheets.dart';
+import '../../../core/ui/header_title.dart';
+import '../../../core/ui/popups.dart';
+import '../../instances/application/instances_controller.dart';
 import '../../instances/application/network_providers.dart';
 import '../application/files_providers.dart';
 import '../application/schema_providers.dart';
@@ -83,6 +85,13 @@ class _FileEditorPageState extends ConsumerState<FileEditorPage> {
     }
   }
 
+  /// "Survival · config": which instance and folder the file is in.
+  String _subtitle() {
+    final instance = ref.read(instanceProvider(widget.instanceId))?.name ?? 'Instance';
+    final parts = widget.path.split('/')..removeLast();
+    return parts.isEmpty ? instance : '$instance · ${parts.join('/')}';
+  }
+
   Widget _textEditor() => Padding(
     padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
     child: FTextField(
@@ -110,7 +119,7 @@ class _FileEditorPageState extends ConsumerState<FileEditorPage> {
       canPop: !_dirty,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        final discard = await showConfirmSheet(
+        final discard = await showConfirmDialog(
           context,
           title: 'Discard changes?',
           message: 'You have unsaved changes to $name.',
@@ -122,7 +131,8 @@ class _FileEditorPageState extends ConsumerState<FileEditorPage> {
       child: FScaffold(
         childPad: false,
         header: FHeader.nested(
-          title: Text(name, overflow: TextOverflow.ellipsis),
+          titleAlignment: Alignment.centerLeft,
+        title: HeaderTitle(title: name, subtitle: _subtitle()),
           prefixes: [
             FHeaderAction.back(onPress: () => Navigator.of(context).maybePop()),
           ],

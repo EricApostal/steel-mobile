@@ -2,7 +2,9 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 
+import '../../../core/ui/header_title.dart';
 import '../../files/ui/file_browser.dart';
+import '../../server/application/server_controller.dart';
 import '../../server/ui/console_view.dart';
 import '../application/instances_controller.dart';
 import 'instance_bottom_bar.dart';
@@ -34,7 +36,8 @@ class _InstancePageState extends ConsumerState<InstancePage> {
     return FScaffold(
       childPad: false,
       header: FHeader.nested(
-        title: Text(name, overflow: TextOverflow.ellipsis),
+        titleAlignment: Alignment.centerLeft,
+        title: _InstanceTitle(instanceId: _id),
         prefixes: [FHeaderAction.back(onPress: () => Navigator.of(context).pop())],
         suffixes: [
           StartStopButton(instanceId: _id),
@@ -64,6 +67,35 @@ class _InstancePageState extends ConsumerState<InstancePage> {
           InstanceBottomBar(instanceId: _id, showCommands: _tab == 0),
         ],
       ),
+    );
+  }
+}
+
+/// Name, with status and versions as the secondary line.
+class _InstanceTitle extends ConsumerWidget {
+  const _InstanceTitle({required this.instanceId});
+
+  final String instanceId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final instance = ref.watch(instanceProvider(instanceId));
+    final status = ref.watch(serverControllerProvider(instanceId).select((s) => s.status));
+    if (instance == null) return const SizedBox.shrink();
+
+    final mc = instance.version.minecraft;
+    return HeaderTitle(
+      title: instance.name,
+      subtitle: [
+        switch (status) {
+          ServerStatus.idle => 'Stopped',
+          ServerStatus.starting => 'Starting…',
+          ServerStatus.running => 'Running',
+          ServerStatus.stopping => 'Stopping…',
+        },
+        instance.version.steel,
+        if (mc != null) 'MC $mc',
+      ].join(' · '),
     );
   }
 }

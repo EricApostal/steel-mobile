@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 
 import '../../../core/format.dart';
-import '../../../core/ui/sheets.dart';
+import '../../../core/ui/popups.dart';
 import '../../releases/application/install_controller.dart';
 import '../../releases/application/releases_providers.dart';
 import '../../releases/data/steel_build.dart';
@@ -12,19 +12,17 @@ import '../application/instances_controller.dart';
 import '../data/instance.dart';
 
 /// Create a new instance, or edit [editing]. Resolves to the saved instance.
-Future<Instance?> showInstanceFormSheet(BuildContext context, {Instance? editing}) {
-  return showSheet<Instance>(
+Future<Instance?> showInstanceFormDialog(BuildContext context, {Instance? editing}) {
+  return showPopup<Instance>(
     context,
-    (_) => SheetFrame(
-      title: editing == null ? 'New instance' : 'Edit instance',
-      child: _InstanceForm(editing: editing),
-    ),
+    builder: (context, style) => _InstanceForm(style: style, editing: editing),
   );
 }
 
 class _InstanceForm extends ConsumerStatefulWidget {
-  const _InstanceForm({this.editing});
+  const _InstanceForm({required this.style, this.editing});
 
+  final FDialogStyle style;
   final Instance? editing;
 
   @override
@@ -84,26 +82,40 @@ class _InstanceFormState extends ConsumerState<_InstanceForm> {
           serverControllerProvider(widget.editing!.id).select((s) => s.isActive),
         );
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        FTextField(
-          control: FTextFieldControl.managed(controller: _name),
-          label: const Text('Name'),
-          hint: 'My server',
-          autofocus: widget.editing == null,
+    final canSave = !_saving && _tag != null && _name.text.trim().isNotEmpty;
+
+    return PopupFrame(
+      style: widget.style,
+      title: widget.editing == null ? 'New instance' : 'Edit instance',
+      actions: [
+        FButton(
+          variant: FButtonVariant.outline,
+          onPress: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
         ),
-        const SizedBox(height: 16),
-        Text('Steel version', style: theme.typography.body.sm.copyWith(fontWeight: FontWeight.w500)),
-        const SizedBox(height: 8),
-        if (running)
-          Text(
-            'Stop the server to change its version.',
-            style: theme.typography.body.xs.copyWith(color: theme.colors.mutedForeground),
+        FButton(
+          onPress: canSave ? () => _save(builds.value ?? const []) : null,
+          child: Text(widget.editing == null ? 'Create' : 'Save'),
+        ),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FTextField(
+            control: FTextFieldControl.managed(controller: _name),
+            label: const Text('Name'),
+            hint: 'My server',
+            autofocus: widget.editing == null,
           ),
-        Flexible(
-          child: builds.when(
+          const SizedBox(height: 16),
+          Text('Steel version', style: theme.typography.body.sm.copyWith(fontWeight: FontWeight.w500)),
+          const SizedBox(height: 8),
+          if (running)
+            Text(
+              'Stop the server to change its version.',
+              style: theme.typography.body.xs.copyWith(color: theme.colors.mutedForeground),
+            ),
+          builds.when(
             loading: () => const Padding(
               padding: EdgeInsets.all(24),
               child: Center(child: FCircularProgress()),
@@ -117,43 +129,28 @@ class _InstanceFormState extends ConsumerState<_InstanceForm> {
                     padding: EdgeInsets.symmetric(vertical: 16),
                     child: Text('No compatible versions available.'),
                   )
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                : FTileGroup(
+                    maxHeight: 240,
                     children: [
-                      Flexible(
-                        child: FTileGroup(
-                          maxHeight: 260,
-                          children: [
-                            for (final b in items)
-                              FTile(
-                                enabled: !running,
-                                selected: _tag == b.tag,
-                                prefix: Icon(
-                                  _tag == b.tag ? FLucideIcons.circleCheck : FLucideIcons.circle,
-                                ),
-                                title: Text('Steel ${b.version}'),
-                                subtitle: Text([
-                                  if (b.minecraftVersion != null) 'Minecraft ${b.minecraftVersion}',
-                                  installed.contains(b.tag) ? 'Downloaded' : formatBytes(b.size),
-                                ].join(' · ')),
-                                onPress: () => setState(() => _tag = b.tag),
-                              ),
-                          ],
+                      for (final b in items)
+                        FTile(
+                          enabled: !running,
+                          selected: _tag == b.tag,
+                          prefix: Icon(
+                            _tag == b.tag ? FLucideIcons.circleCheck : FLucideIcons.circle,
+                          ),
+                          title: Text('Steel ${b.version}'),
+                          subtitle: Text([
+                            if (b.minecraftVersion != null) 'Minecraft ${b.minecraftVersion}',
+                            installed.contains(b.tag) ? 'Downloaded' : formatBytes(b.size),
+                          ].join(' · ')),
+                          onPress: () => setState(() => _tag = b.tag),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      FButton(
-                        onPress: _saving || _tag == null || _name.text.trim().isEmpty
-                            ? null
-                            : () => _save(items),
-                        child: Text(widget.editing == null ? 'Create' : 'Save'),
-                      ),
                     ],
                   ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

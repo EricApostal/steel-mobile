@@ -8,12 +8,12 @@ import '../../server/application/server_controller.dart';
 import '../application/instances_controller.dart';
 import '../application/network_providers.dart';
 import '../data/instance.dart';
-import 'instance_form_sheet.dart';
+import 'instance_form_dialog.dart';
 import 'instance_page.dart';
 
-/// Opens the create sheet and, on success, the new instance.
+/// Opens the create dialog and, on success, the new instance.
 Future<void> createInstance(BuildContext context) async {
-  final created = await showInstanceFormSheet(context);
+  final created = await showInstanceFormDialog(context);
   if (created != null && context.mounted) {
     await pushPage<void>(context, (_) => InstancePage(instanceId: created.id));
   }

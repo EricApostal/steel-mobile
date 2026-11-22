@@ -5,7 +5,8 @@ import 'package:forui/forui.dart';
 import '../../../core/format.dart';
 import '../../../core/navigation.dart';
 import '../../../core/ui/empty_state.dart';
-import '../../../core/ui/sheets.dart';
+import '../../../core/ui/action_menu.dart';
+import '../../../core/ui/popups.dart';
 import '../application/browser_path.dart';
 import '../application/files_providers.dart';
 import '../data/file_service.dart';
@@ -48,7 +49,7 @@ class _FileBrowserState extends ConsumerState<FileBrowser> {
   }
 
   Future<void> _create({required bool directory}) async {
-    final name = await showPromptSheet(
+    final name = await showPromptDialog(
       context,
       title: directory ? 'New folder' : 'New file',
       label: 'Name',
@@ -61,13 +62,9 @@ class _FileBrowserState extends ConsumerState<FileBrowser> {
         : _service.createFile(_path, name));
   }
 
-  void _showActions(FileEntry entry) {
-    showActionSheet(
-      context,
-      title: entry.name,
-      actions: [
-        SheetAction('Rename', FLucideIcons.pencil, () async {
-          final name = await showPromptSheet(
+  List<MenuAction> _actionsFor(FileEntry entry) => [
+        MenuAction('Rename', FLucideIcons.pencil, () async {
+          final name = await showPromptDialog(
             context,
             title: 'Rename',
             label: 'Name',
@@ -79,8 +76,8 @@ class _FileBrowserState extends ConsumerState<FileBrowser> {
             await _run(() => _service.rename(entry, name));
           }
         }),
-        SheetAction('Delete', FLucideIcons.trash2, () async {
-          final ok = await showConfirmSheet(
+        MenuAction('Delete', FLucideIcons.trash2, () async {
+          final ok = await showConfirmDialog(
             context,
             title: 'Delete "${entry.name}"?',
             message: entry.isDirectory
@@ -91,9 +88,7 @@ class _FileBrowserState extends ConsumerState<FileBrowser> {
           );
           if (ok) await _run(() => _service.delete(entry));
         }, destructive: true),
-      ],
-    );
-  }
+      ];
 
   Future<void> _openEntry(FileEntry entry) async {
     if (entry.isDirectory) {
@@ -118,10 +113,10 @@ class _FileBrowserState extends ConsumerState<FileBrowser> {
         _Breadcrumbs(
           segments: segments,
           onNavigate: _open,
-          onAdd: () => showActionSheet(context, actions: [
-            SheetAction('New file', FLucideIcons.filePlus, () => _create(directory: false)),
-            SheetAction('New folder', FLucideIcons.folderPlus, () => _create(directory: true)),
-          ]),
+          addActions: [
+            MenuAction('New file', FLucideIcons.filePlus, () => _create(directory: false)),
+            MenuAction('New folder', FLucideIcons.folderPlus, () => _create(directory: true)),
+          ],
         ),
         Expanded(
           child: listing.when(
@@ -155,7 +150,7 @@ class _FileBrowserState extends ConsumerState<FileBrowser> {
                         ? formatDate(e.modified)
                         : '${formatBytes(e.size)} · ${formatDate(e.modified)}',
                     onPress: () => _openEntry(e),
-                    onMore: () => _showActions(e),
+                    actions: _actionsFor(e),
                   ),
               ],
             ),
@@ -179,14 +174,14 @@ class _Row extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onPress,
-    this.onMore,
+    this.actions,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onPress;
-  final VoidCallback? onMore;
+  final List<MenuAction>? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -196,13 +191,16 @@ class _Row extends StatelessWidget {
         prefix: Icon(icon),
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(subtitle),
-        suffix: onMore == null
+        suffix: actions == null
             ? null
-            : FButton.icon(
-                variant: FButtonVariant.ghost,
-                size: FButtonSizeVariant.sm,
-                onPress: onMore,
-                child: const Icon(FLucideIcons.ellipsisVertical),
+            : ActionMenu(
+                actions: actions!,
+                builder: (context, toggle) => FButton.icon(
+                  variant: FButtonVariant.ghost,
+                  size: FButtonSizeVariant.sm,
+                  onPress: toggle,
+                  child: const Icon(FLucideIcons.ellipsisVertical),
+                ),
               ),
         onPress: onPress,
       ),
@@ -211,11 +209,11 @@ class _Row extends StatelessWidget {
 }
 
 class _Breadcrumbs extends StatefulWidget {
-  const _Breadcrumbs({required this.segments, required this.onNavigate, required this.onAdd});
+  const _Breadcrumbs({required this.segments, required this.onNavigate, required this.addActions});
 
   final List<String> segments;
   final ValueChanged<List<String>> onNavigate;
-  final VoidCallback onAdd;
+  final List<MenuAction> addActions;
 
   @override
   State<_Breadcrumbs> createState() => _BreadcrumbsState();
@@ -273,11 +271,14 @@ class _BreadcrumbsState extends State<_Breadcrumbs> {
               ),
             ),
           ),
-          FButton.icon(
-            variant: FButtonVariant.ghost,
-            size: FButtonSizeVariant.sm,
-            onPress: widget.onAdd,
-            child: const Icon(FLucideIcons.plus),
+          ActionMenu(
+            actions: widget.addActions,
+            builder: (context, toggle) => FButton.icon(
+              variant: FButtonVariant.ghost,
+              size: FButtonSizeVariant.sm,
+              onPress: toggle,
+              child: const Icon(FLucideIcons.plus),
+            ),
           ),
         ],
       ),
