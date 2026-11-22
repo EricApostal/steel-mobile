@@ -8,49 +8,85 @@ import '../application/console_filter.dart';
 import '../application/server_controller.dart';
 import '../data/log_entry.dart';
 
-/// The log as slivers, so it scrolls together with the rest of the page:
-/// a filter bar, then one color-coded row per entry.
-class ConsoleSliver extends ConsumerWidget {
-  const ConsoleSliver({super.key, required this.instanceId});
+/// The log: a filter bar above a scrolling, color-coded list. The list follows
+/// new output until you scroll up, and starts at the newest line.
+class ConsoleView extends ConsumerStatefulWidget {
+  const ConsoleView({super.key, required this.instanceId});
 
   final String instanceId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = context.theme;
-    final entries = ref.watch(serverControllerProvider(instanceId).select((s) => s.entries));
-    final filter = ref.watch(consoleFilterControllerProvider(instanceId));
-    final visible = entries.where(filter.accepts).toList();
-    final background = theme.colors.secondary;
+  ConsumerState<ConsoleView> createState() => _ConsoleViewState();
+}
 
-    return SliverMainAxisGroup(
-      slivers: [
-        SliverToBoxAdapter(child: _FilterBar(instanceId: instanceId, entries: entries)),
-        SliverToBoxAdapter(
-          child: ColoredBox(color: background, child: const SizedBox(height: 6, width: double.infinity)),
-        ),
-        if (visible.isEmpty)
-          SliverToBoxAdapter(
-            child: ColoredBox(
-              color: background,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 48),
-                child: Center(
-                  child: Text(
-                    entries.isEmpty ? 'No output yet.' : 'Nothing matches this filter.',
-                    style: theme.typography.body.sm.copyWith(color: theme.colors.mutedForeground),
+class _ConsoleViewState extends ConsumerState<ConsoleView> {
+  final _scroll = ScrollController();
+  var _following = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(() {
+      if (_scroll.hasClients) _following = _scroll.position.extentAfter < 80;
+    });
+    _jumpToEnd();
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _jumpToEnd() {
+    // Twice: list extents are estimated until the new rows have been laid out.
+    for (var i = 0; i < 2; i++) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.theme;
+    final id = widget.instanceId;
+    final entries = ref.watch(serverControllerProvider(id).select((s) => s.entries));
+    final filter = ref.watch(consoleFilterControllerProvider(id));
+    final visible = entries.where(filter.accepts).toList();
+
+    ref.listen(serverControllerProvider(id).select((s) => s.entries), (prev, next) {
+      // A restart (log cleared) or a command you just sent: show the newest.
+      final cleared = prev != null && next.length < prev.length;
+      final sentCommand = next.isNotEmpty &&
+          next.last.level == LogLevel.command &&
+          (prev == null || prev.isEmpty || prev.last.id != next.last.id);
+      if (cleared || sentCommand) _following = true;
+      if (_following) _jumpToEnd();
+    });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _FilterBar(instanceId: id, entries: entries),
+        Expanded(
+          child: ColoredBox(
+            color: theme.colors.secondary,
+            child: visible.isEmpty
+                ? Center(
+                    child: Text(
+                      entries.isEmpty ? 'No output yet.' : 'Nothing matches this filter.',
+                      style: theme.typography.body.sm.copyWith(color: theme.colors.mutedForeground),
+                    ),
+                  )
+                : ListView.builder(
+                    controller: _scroll,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    itemCount: visible.length,
+                    itemBuilder: (_, i) => _LogRow(entry: visible[i]),
                   ),
-                ),
-              ),
-            ),
-          )
-        else
-          SliverList.builder(
-            itemCount: visible.length,
-            itemBuilder: (_, i) => ColoredBox(color: background, child: _LogRow(entry: visible[i])),
           ),
-        // Keeps the panel filling the screen when the log is short.
-        SliverFillRemaining(hasScrollBody: false, child: ColoredBox(color: background)),
+        ),
       ],
     );
   }
@@ -207,10 +243,9 @@ class _LogRow extends StatelessWidget {
 
 /// Input for sending commands to the running server: history, field, send.
 class CommandField extends ConsumerStatefulWidget {
-  const CommandField({super.key, required this.instanceId, required this.onSent});
+  const CommandField({super.key, required this.instanceId});
 
   final String instanceId;
-  final VoidCallback onSent;
 
   @override
   ConsumerState<CommandField> createState() => _CommandFieldState();
@@ -239,7 +274,6 @@ class _CommandFieldState extends ConsumerState<CommandField> {
     ref.read(serverControllerProvider(widget.instanceId).notifier).sendCommand(command);
     _text.clear();
     _focus.requestFocus(); // keep the keyboard up for the next command
-    widget.onSent();
   }
 
   void _showHistory(List<String> history) {

@@ -11,18 +11,18 @@ import '../application/files_providers.dart';
 import '../data/file_service.dart';
 import 'file_editor_page.dart';
 
-/// Browse and manage one instance's directory, as slivers so the list scrolls
-/// together with the rest of the page.
-class FileBrowserSliver extends ConsumerStatefulWidget {
-  const FileBrowserSliver({super.key, required this.instanceId});
+/// Browse and manage one instance's directory: fixed breadcrumbs above a
+/// scrolling list.
+class FileBrowser extends ConsumerStatefulWidget {
+  const FileBrowser({super.key, required this.instanceId});
 
   final String instanceId;
 
   @override
-  ConsumerState<FileBrowserSliver> createState() => _FileBrowserSliverState();
+  ConsumerState<FileBrowser> createState() => _FileBrowserState();
 }
 
-class _FileBrowserSliverState extends ConsumerState<FileBrowserSliver> {
+class _FileBrowserState extends ConsumerState<FileBrowser> {
   List<String> get _segments => ref.read(browserPathProvider(widget.instanceId));
   String get _path => _segments.join('/');
   FileService get _service => ref.read(fileServiceProvider(widget.instanceId));
@@ -112,61 +112,53 @@ class _FileBrowserSliverState extends ConsumerState<FileBrowserSliver> {
     final segments = ref.watch(browserPathProvider(widget.instanceId));
     final listing = ref.watch(directoryListingProvider(widget.instanceId, segments.join('/')));
 
-    return SliverMainAxisGroup(
-      slivers: [
-        SliverToBoxAdapter(
-          child: _Breadcrumbs(
-            segments: segments,
-            onNavigate: _open,
-            onAdd: () => showActionSheet(context, actions: [
-              SheetAction('New file', FLucideIcons.filePlus, () => _create(directory: false)),
-              SheetAction('New folder', FLucideIcons.folderPlus, () => _create(directory: true)),
-            ]),
-          ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Breadcrumbs(
+          segments: segments,
+          onNavigate: _open,
+          onAdd: () => showActionSheet(context, actions: [
+            SheetAction('New file', FLucideIcons.filePlus, () => _create(directory: false)),
+            SheetAction('New folder', FLucideIcons.folderPlus, () => _create(directory: true)),
+          ]),
         ),
-        listing.when(
-          loading: () => const SliverToBoxAdapter(
-            child: Padding(padding: EdgeInsets.all(32), child: Center(child: FCircularProgress())),
-          ),
-          error: (e, _) => SliverToBoxAdapter(
-            child: EmptyState(icon: FLucideIcons.triangleAlert, message: '$e'),
-          ),
-          data: (entries) => SliverMainAxisGroup(
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-                sliver: SliverList.list(
-                  children: [
-                    if (segments.isNotEmpty)
-                      _Row(
-                        icon: FLucideIcons.cornerLeftUp,
-                        title: '..',
-                        subtitle: 'Up one level',
-                        onPress: () => _open(segments.sublist(0, segments.length - 1)),
-                      ),
-                    for (final e in entries)
-                      _Row(
-                        icon: e.isDirectory ? FLucideIcons.folder : _iconFor(e),
-                        title: e.name,
-                        subtitle: e.isDirectory
-                            ? formatDate(e.modified)
-                            : '${formatBytes(e.size)} · ${formatDate(e.modified)}',
-                        onPress: () => _openEntry(e),
-                        onMore: () => _showActions(e),
-                      ),
-                  ],
-                ),
-              ),
-              if (entries.isEmpty)
-                SliverToBoxAdapter(
-                  child: EmptyState(
-                    icon: FLucideIcons.folderOpen,
-                    message: segments.isEmpty
-                        ? 'Nothing here yet.\nStart the server once to generate its files.'
-                        : 'This folder is empty.',
+        Expanded(
+          child: listing.when(
+            loading: () => const Center(child: FCircularProgress()),
+            error: (e, _) => EmptyState(icon: FLucideIcons.triangleAlert, message: '$e'),
+            data: (entries) => ListView(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+              children: [
+                if (segments.isNotEmpty)
+                  _Row(
+                    icon: FLucideIcons.cornerLeftUp,
+                    title: '..',
+                    subtitle: 'Up one level',
+                    onPress: () => _open(segments.sublist(0, segments.length - 1)),
                   ),
-                ),
-            ],
+                if (entries.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 32),
+                    child: EmptyState(
+                      icon: FLucideIcons.folderOpen,
+                      message: segments.isEmpty
+                          ? 'Nothing here yet.\nStart the server once to generate its files.'
+                          : 'This folder is empty.',
+                    ),
+                  ),
+                for (final e in entries)
+                  _Row(
+                    icon: e.isDirectory ? FLucideIcons.folder : _iconFor(e),
+                    title: e.name,
+                    subtitle: e.isDirectory
+                        ? formatDate(e.modified)
+                        : '${formatBytes(e.size)} · ${formatDate(e.modified)}',
+                    onPress: () => _openEntry(e),
+                    onMore: () => _showActions(e),
+                  ),
+              ],
+            ),
           ),
         ),
       ],
