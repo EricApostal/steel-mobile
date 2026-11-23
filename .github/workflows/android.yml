@@ -41,21 +41,23 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
-      # Only the ABIs Steel publishes binaries for (arm64 and x86_64).
-      - name: Build release APKs
-        run: flutter build apk --release --split-per-abi --target-platform android-arm64,android-x64
+      # One APK for everything Steel runs on: arm64 phones and x86_64 emulators.
+      - name: Build release APK
+        run: flutter build apk --release --target-platform android-arm64,android-x64
 
-      - name: Collect APKs
-        id: apks
+      - name: Name the APK
+        id: apk
         run: |
           version="$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)"
           mkdir dist
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "dist/steel-mobile-${version}-android-arm64.apk"
-          cp build/app/outputs/flutter-apk/app-x86_64-release.apk    "dist/steel-mobile-${version}-android-x86_64.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/steel-mobile-${version}-android.apk"
+          echo "path=dist/steel-mobile-${version}-android.apk" >> "$GITHUB_OUTPUT"
           ls -lh dist
 
-      - uses: actions/upload-artifact@v4
+      # archive: false uploads the file itself, so the download is the .apk and
+      # not a zip containing it. (The artifact is named after the file.)
+      - uses: actions/upload-artifact@v7
         with:
-          name: android-apks
-          path: dist/*.apk
+          path: ${{ steps.apk.outputs.path }}
+          archive: false
           if-no-files-found: error

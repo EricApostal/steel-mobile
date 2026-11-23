@@ -35,14 +35,18 @@ jobs:
       # `ditto` keeps symlinks and permissions, which a plain zip would lose
       # and which would break the .app bundle.
       - name: Package the app
+        id: package
         run: |
           version="$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)"
           mkdir dist
           ditto -c -k --keepParent build/macos/Build/Products/Release/steel_mobile.app "dist/steel-mobile-${version}-macos.zip"
+          echo "path=dist/steel-mobile-${version}-macos.zip" >> "$GITHUB_OUTPUT"
           ls -lh dist
 
-      - uses: actions/upload-artifact@v4
+      # archive: false uploads our zip as-is. Without it, GitHub would wrap it
+      # in a second zip. (The artifact is named after the file.)
+      - uses: actions/upload-artifact@v7
         with:
-          name: macos-app
-          path: dist/*.zip
+          path: ${{ steps.package.outputs.path }}
+          archive: false
           if-no-files-found: error
