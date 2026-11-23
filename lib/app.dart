@@ -7,12 +7,14 @@ import 'package:forui/forui.dart';
 import 'package:material_ui/material_ui.dart' show MaterialApp;
 
 import 'core/router.dart';
+import 'features/server/application/keep_awake.dart';
 
 class SteelApp extends ConsumerWidget {
   const SteelApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(keepAwakeProvider);
     final desktop = const {
       TargetPlatform.macOS,
       TargetPlatform.linux,

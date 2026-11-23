@@ -19,6 +19,7 @@ dependencies:
   riverpod_annotation: ^4.0.8
   steelmc_api:
     path: packages/steelmc_api
+  wakelock_plus: ^1.8.2
 
 dev_dependencies:
   flutter_test:
