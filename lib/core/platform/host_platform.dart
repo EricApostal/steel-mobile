@@ -30,11 +30,13 @@ class HostPlatform {
             target: SteelTarget.macos,
             launcher: DirectLauncher(clearQuarantine: true),
           ),
-        // Wired up but not yet exercised: no Linux/Windows runner project yet.
+        // `steel-linux` is glibc, which every desktop distro Flutter runs on
+        // provides, so the musl build isn't needed here. No arm64 build yet.
         Abi.linuxX64 => const HostPlatform(
             target: SteelTarget.linux,
             launcher: DirectLauncher(),
           ),
+        // Wired up but not yet exercised: no Windows runner project yet.
         Abi.windowsX64 => const HostPlatform(
             target: SteelTarget.windows,
             launcher: DirectLauncher(makeExecutable: false),
