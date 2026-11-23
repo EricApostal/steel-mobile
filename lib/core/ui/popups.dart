@@ -9,6 +9,7 @@ Future<T?> showPopup<T>(
 }) {
   return showFDialog<T>(
     context: context,
+    useRootNavigator: true, // cover the whole window, sidebar included
     builder: (context, style, animation) => FDialog(animation: animation, builder: builder),
   );
 }

@@ -13,6 +13,7 @@ dependencies:
     sdk: flutter
   flutter_riverpod: ^3.5.0
   forui: ^0.28.0
+  go_router: ^18.1.4
   material_ui: ^1.1.0
   path_provider: ^2.1.6
   riverpod_annotation: ^4.0.8

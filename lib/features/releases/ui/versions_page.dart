@@ -17,6 +17,20 @@ class VersionsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    return FScaffold(
+      childPad: false,
+      header: FHeader(title: const Text('Versions')),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: _content(context, ref),
+        ),
+      ),
+    );
+  }
+
+  Widget _content(BuildContext context, WidgetRef ref) {
     final target = ref.watch(steelTargetProvider);
     final builds = ref.watch(buildsProvider);
 

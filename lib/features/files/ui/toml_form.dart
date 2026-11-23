@@ -37,11 +37,17 @@ class TomlForm extends StatelessWidget {
           ),
     ];
 
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
-      itemCount: sections.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (_, i) => sections[i],
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: ListView.separated(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+          itemCount: sections.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 12),
+          itemBuilder: (_, i) => sections[i],
+        ),
+      ),
     );
   }
 }

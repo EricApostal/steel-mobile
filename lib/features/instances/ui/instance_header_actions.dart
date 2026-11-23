@@ -3,6 +3,9 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 
+import 'package:go_router/go_router.dart';
+
+import '../../../core/router.dart';
 import '../../../core/ui/action_menu.dart';
 import '../../../core/ui/popups.dart';
 import '../../releases/application/releases_providers.dart';
@@ -170,7 +173,7 @@ class InstanceMenu extends ConsumerWidget {
       destructive: true,
     );
     if (!ok || !context.mounted) return;
-    Navigator.of(context).pop();
+    context.go(AppRoutes.instances);
     ref.invalidate(serverControllerProvider(instanceId)); // kills the process
     await ref.read(instancesControllerProvider.notifier).remove(instanceId);
   }

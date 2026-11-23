@@ -3,14 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 
 import '../../../core/format.dart';
-import '../../../core/navigation.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/router.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../../core/ui/action_menu.dart';
 import '../../../core/ui/popups.dart';
 import '../application/browser_path.dart';
 import '../application/files_providers.dart';
 import '../data/file_service.dart';
-import 'file_editor_page.dart';
 
 /// Browse and manage one instance's directory: fixed breadcrumbs above a
 /// scrolling list.
@@ -94,10 +95,7 @@ class _FileBrowserState extends ConsumerState<FileBrowser> {
     if (entry.isDirectory) {
       _open(entry.path.split('/'));
     } else {
-      await pushPage<void>(
-        context,
-        (_) => FileEditorPage(instanceId: widget.instanceId, path: entry.path),
-      );
+      await context.push(AppRoutes.file(widget.instanceId, entry.path));
       _refresh(); // size/modified may have changed
     }
   }

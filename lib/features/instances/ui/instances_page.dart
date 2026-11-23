@@ -2,23 +2,27 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 
-import '../../../core/navigation.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/router.dart';
+import '../../../core/ui/layout.dart';
 import '../../../core/ui/empty_state.dart';
 import '../../server/application/server_controller.dart';
 import '../application/instances_controller.dart';
 import '../application/network_providers.dart';
 import '../data/instance.dart';
 import 'instance_form_dialog.dart';
-import 'instance_page.dart';
 
 /// Opens the create dialog and, on success, the new instance.
 Future<void> createInstance(BuildContext context) async {
   final created = await showInstanceFormDialog(context);
   if (created != null && context.mounted) {
-    await pushPage<void>(context, (_) => InstancePage(instanceId: created.id));
+    context.go(AppRoutes.instance(created.id));
   }
 }
 
+/// The Instances tab. On a phone: the list. On desktop the list lives in the
+/// sidebar, so this is what shows when no instance is selected.
 class InstancesPage extends ConsumerWidget {
   const InstancesPage({super.key});
 
@@ -26,23 +30,46 @@ class InstancesPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final instances = ref.watch(instancesControllerProvider);
 
-    if (instances.isEmpty) {
+    final newInstance = FButton(
+      onPress: () => createInstance(context),
+      mainAxisSize: MainAxisSize.min,
+      prefix: const Icon(FLucideIcons.plus),
+      child: const Text('New instance'),
+    );
+
+    if (isDesktopWidth(context)) {
       return EmptyState(
         icon: FLucideIcons.server,
-        message: 'No instances yet.\nCreate one to run your own Steel server.',
-        action: FButton(
-          onPress: () => createInstance(context),
-          prefix: const Icon(FLucideIcons.plus),
-          child: const Text('New instance'),
-        ),
+        message: instances.isEmpty
+            ? 'No instances yet.\nCreate one to run your own Steel server.'
+            : 'Select an instance from the sidebar.',
+        action: newInstance,
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: instances.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (_, i) => _InstanceTile(instance: instances[i]),
+    return FScaffold(
+      childPad: false,
+      header: FHeader(
+        title: const Text('Instances'),
+        suffixes: [
+          FHeaderAction(
+            icon: const Icon(FLucideIcons.plus),
+            onPress: () => createInstance(context),
+          ),
+        ],
+      ),
+      child: instances.isEmpty
+          ? EmptyState(
+              icon: FLucideIcons.server,
+              message: 'No instances yet.\nCreate one to run your own Steel server.',
+              action: newInstance,
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: instances.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
+              itemBuilder: (_, i) => _InstanceTile(instance: instances[i]),
+            ),
     );
   }
 }
@@ -70,7 +97,7 @@ class _InstanceTile extends ConsumerWidget {
       ].join(' · ')),
       details: StatusBadge(status: status),
       suffix: const Icon(FLucideIcons.chevronRight),
-      onPress: () => pushPage<void>(context, (_) => InstancePage(instanceId: instance.id)),
+      onPress: () => context.go(AppRoutes.instance(instance.id)),
     );
   }
 }
