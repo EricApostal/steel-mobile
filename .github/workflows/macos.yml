@@ -1,0 +1,48 @@
+name: macOS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the app
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: beta
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Build release app
+        run: flutter build macos --release
+
+      # `ditto` keeps symlinks and permissions, which a plain zip would lose
+      # and which would break the .app bundle.
+      - name: Package the app
+        run: |
+          version="$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)"
+          mkdir dist
+          ditto -c -k --keepParent build/macos/Build/Products/Release/steel_mobile.app "dist/steel-mobile-${version}-macos.zip"
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: dist/*.zip
+          if-no-files-found: error

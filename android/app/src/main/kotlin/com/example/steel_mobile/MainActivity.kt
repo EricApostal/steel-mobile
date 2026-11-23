@@ -1,4 +1,4 @@
-package com.example.steel_mobile
+package app.rubisco.steelmc
 
 import io.flutter.embedding.android.FlutterActivity
 
